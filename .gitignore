@@ -23,6 +23,7 @@ logs/
 
 # Test / tooling artefacts
 .pytest_cache/
+pytest-cache-files-*/
 .coverage
 htmlcov/
 .ruff_cache/

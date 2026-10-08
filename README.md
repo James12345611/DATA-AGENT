@@ -289,7 +289,31 @@ DATA-AGENT/                          # 本仓库根目录即 Text2SQL V1 项目
 └─ reports/                         # 验收报告（离线/真实 × 样例/全量）
 ```
 
-## 6. 后续演进（V2 建议）
+## 6. 仓库与更新代码
+
+本项目已托管在 **https://github.com/James12345611/DATA-AGENT**（仓库根目录即本项目）。
+
+```powershell
+# 首次：本机已配置好 origin 与 SSH
+git remote -v          # git@github.com:James12345611/DATA-AGENT.git
+
+# 日常：改完代码跑测试，然后提交推送
+.\.venv\Scripts\python.exe -m pytest -q
+git add -A
+git commit -m "fix: 你的改动说明"
+git push origin main
+```
+
+注意事项：
+
+- **`.env` 已被 `.gitignore` 忽略，永远不会被提交**；仓库里只有 `.env.example` 模板。
+  提交前可自查：`git status --short` 里不应出现 `.env`，`git grep --cached -n "DB_PASSWORD=" ` 应只匹配到模板占位符。
+- 若 `git push` 报 `couldn't create signal pipe`（Git 自带 ssh 与沙箱/安全软件冲突），
+  改用系统 OpenSSH 即可，本仓库已在 `.git/config` 里设置好：
+  `git config core.sshCommand "C:/Windows/System32/OpenSSH/ssh.exe"`。
+- 只想看远程有什么：`git fetch origin && git log --oneline origin/main -5`。
+
+## 7. 后续演进（V2 建议）
 
 1. 按文档 6.8 第 6 步把 Catalog 迁移到 MySQL `catalog_*`（补齐契约字段后以存储层为唯一来源）；
 2. 明细层（DWD）开放：增加重复聚合风险规则与 `1:N` JOIN 支持，`retry_with_new_table` 路由落地；
