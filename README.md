@@ -283,6 +283,7 @@ DATA-AGENT/                          # 本仓库根目录即 Text2SQL V1 项目
 │  ├─ load_full_data.py             # 全量/样例数据导入
 │  ├─ materialize_marts.py          # 业务对象物化 / 还原
 │  ├─ run_acceptance.py             # 验收报告
+│  ├─ copy_project.py               # 导出项目到其它目录（自动排除 .env/缓存）
 │  ├─ dev.ps1 run_in_sandbox.py sandbox_site/  # 环境兼容
 │  └─ debug_extraction.py debug_ast.py debug_live_state.py
 ├─ docs/                            # 测试指南、交付说明
