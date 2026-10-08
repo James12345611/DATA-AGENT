@@ -1,0 +1,286 @@
+# =============================================================================
+# V1 Text2SQL catalog (text2sql_V1.md section 6)
+#
+# This is the controlled business semantic registry consumed by schema_linking.
+# It is deliberately NOT the physical schema: only the six business views that
+# V1 exposes may appear here, with an explicit grain, business synonyms,
+# metric semantics (口径) and the join rules that are allowed.
+#
+# Grains are the guard against wrong joins and double aggregation:
+#   dim_user                    one row per user
+#   mart_user_behavior_summary  one row per user
+#   mart_user_order_summary     one row per user
+#   mart_campaign_summary       one row per campaign
+#   mart_funnel_summary         one row per event type
+#   mart_retention_cohort        one row per cohort date
+# =============================================================================
+catalog_version: v1
+dialect: mysql
+
+# The V1 exposure whitelist. Anything not listed here is invisible to the LLM,
+# to schema_linking and to the SQL validator (no raw_*, no fact_*, no catalog_*).
+exposed_tables:
+  - dim_user
+  - mart_user_behavior_summary
+  - mart_user_order_summary
+  - mart_campaign_summary
+  - mart_funnel_summary
+  - mart_retention_cohort
+
+# Tables that exist in the database but must never enter the V1 query surface.
+blocked_prefixes:
+  - raw_
+  - fact_
+  - dim_product
+  - dim_campaign
+  - catalog_
+
+tables:
+  - table_name: dim_user
+    table_kind: dimension
+    grain: one row per user
+    description: 用户画像与注册属性，一行一个用户；用户数、渠道、会员等级、性别、年龄、城市等级的维度来源
+    synonyms: [用户, 用户画像, 用户属性, 客户, 买家, 用户表, user]
+    allowed: true
+    default_time_columns: [register_date]
+    primary_key: user_id
+
+  - table_name: mart_user_behavior_summary
+    table_kind: mart
+    grain: one row per user
+    description: 用户行为汇总，一行一个用户；行为次数、活跃天数以及访问/点击/加购/支付/收藏次数已按用户聚合
+    synonyms: [用户行为, 行为汇总, 用户活跃, 活跃度, 行为统计]
+    allowed: true
+    default_time_columns: [first_event_time, last_event_time]
+    primary_key: user_id
+
+  - table_name: mart_user_order_summary
+    table_kind: mart
+    grain: one row per user
+    description: 用户有效订单与消费汇总，一行一个用户；只统计有效支付且未退款的订单，包含净消费金额与复购标记
+    synonyms: [用户消费, 订单汇总, 消费汇总, 购买汇总, 复购, 用户订单]
+    allowed: true
+    default_time_columns: [first_order_time, last_order_time]
+    primary_key: user_id
+
+  - table_name: mart_campaign_summary
+    table_kind: mart
+    grain: one row per campaign
+    description: 活动效果汇总，一行一个活动；曝光、点击、转化次数以及点击率、曝光转化率
+    synonyms: [活动, 营销活动, 活动效果, 活动汇总, 投放, campaign]
+    allowed: true
+    default_time_columns: []
+    primary_key: campaign_id
+
+  - table_name: mart_funnel_summary
+    table_kind: mart
+    grain: one row per event type
+    description: 行为漏斗汇总，一行一个行为阶段；各阶段行为次数与去重用户数、去重会话数
+    synonyms: [漏斗, 行为漏斗, 转化漏斗, 行为阶段, 事件汇总]
+    allowed: true
+    default_time_columns: []
+    primary_key: event_type
+
+  - table_name: mart_retention_cohort
+    table_kind: mart
+    grain: one row per cohort date
+    description: 留存 cohort 汇总，一行一个 cohort 日期（用户首次活跃日期）；次日、7 日、30 日留存用户数与留存率
+    synonyms: [留存, 留存分析, 留存率, cohort, 队列, 次留, 复访]
+    allowed: true
+    default_time_columns: [cohort_date]
+    primary_key: cohort_date
+
+columns:
+  # ---------------------------------------------------------------- dim_user
+  - {table_name: dim_user, column_name: user_id, data_type: varchar, role: key, business_name: 用户ID, synonyms: [用户, 用户id, 用户标识, 客户, 买家, 用户数, 人数, 用户数量, 独立用户], description: 用户唯一标识，也是所有用户粒度表的关联键，COUNT 后即用户数, nullable: false, allowed: true, aggregation: count, unit: null}
+  - {table_name: dim_user, column_name: gender, data_type: varchar, role: dimension, business_name: 性别, synonyms: [性别, 男, 女, sex, gender], description: 用户性别, nullable: true, allowed: true, aggregation: none, unit: null}
+  - {table_name: dim_user, column_name: age, data_type: smallint, role: dimension, business_name: 年龄, synonyms: [年龄, 年纪, 岁数, age], description: 用户年龄, nullable: true, allowed: true, aggregation: none, unit: 岁}
+  - {table_name: dim_user, column_name: city_tier, data_type: tinyint, role: dimension, business_name: 城市等级, synonyms: [城市等级, 城市层级, 城市线级, 线级, 城市, city_tier], description: 用户所在城市等级, nullable: true, allowed: true, aggregation: none, unit: null}
+  - {table_name: dim_user, column_name: channel, data_type: varchar, role: dimension, business_name: 用户来源渠道, synonyms: [渠道, 来源, 来源渠道, 获客渠道, 注册渠道, channel], description: 用户注册来源渠道, nullable: true, allowed: true, aggregation: none, unit: null}
+  - {table_name: dim_user, column_name: vip_level, data_type: varchar, role: dimension, business_name: 会员等级, synonyms: [会员等级, 会员, vip, vip等级, 等级, 会员级别], description: 用户会员等级, nullable: true, allowed: true, aggregation: none, unit: null}
+  - {table_name: dim_user, column_name: register_date, data_type: date, role: time, business_name: 注册日期, synonyms: [注册日期, 注册时间, 注册, 加入时间], description: 用户注册日期, nullable: true, allowed: true, aggregation: none, unit: null}
+
+  # --------------------------------------------- mart_user_behavior_summary
+  - {table_name: mart_user_behavior_summary, column_name: user_id, data_type: varchar, role: key, business_name: 用户ID, synonyms: [用户, 用户id, 客户, 买家, 用户数, 人数], description: 用户唯一标识，与 dim_user.user_id 一对一, nullable: false, allowed: true, aggregation: count, unit: null}
+  - {table_name: mart_user_behavior_summary, column_name: event_count, data_type: bigint, role: metric, business_name: 用户行为总次数, synonyms: [行为次数, 行为数, 行为总量, 总行为数, 行为总次数], description: 用户行为事件总次数, nullable: false, allowed: true, aggregation: sum, unit: 次}
+  - {table_name: mart_user_behavior_summary, column_name: active_days, data_type: bigint, role: metric, business_name: 活跃天数, synonyms: [活跃天数, 活跃天, 活跃日数, 活跃天数总计], description: 用户发生行为的天数, nullable: false, allowed: true, aggregation: sum, unit: 天}
+  - {table_name: mart_user_behavior_summary, column_name: visit_count, data_type: bigint, role: metric, business_name: 访问次数, synonyms: [访问次数, 访问量, 浏览量, pv, visit], description: event_type=visit 的行为次数, nullable: false, allowed: true, aggregation: sum, unit: 次}
+  - {table_name: mart_user_behavior_summary, column_name: click_count, data_type: bigint, role: metric, business_name: 点击次数, synonyms: [点击次数, 点击量, 点击行为次数], description: event_type=click 的行为次数, nullable: false, allowed: true, aggregation: sum, unit: 次}
+  - {table_name: mart_user_behavior_summary, column_name: cart_count, data_type: bigint, role: metric, business_name: 加购次数, synonyms: [加购次数, 加购量, 加购物车次数, 加购], description: event_type=cart 的行为次数, nullable: false, allowed: true, aggregation: sum, unit: 次}
+  - {table_name: mart_user_behavior_summary, column_name: pay_count, data_type: bigint, role: metric, business_name: 支付行为次数, synonyms: [支付次数, 支付行为次数, 付款次数, 支付行为], description: event_type=pay 的行为次数，不等于有效订单数, nullable: false, allowed: true, aggregation: sum, unit: 次}
+  - {table_name: mart_user_behavior_summary, column_name: favorite_count, data_type: bigint, role: metric, business_name: 收藏次数, synonyms: [收藏次数, 收藏量, 收藏], description: event_type=favorite 的行为次数, nullable: false, allowed: true, aggregation: sum, unit: 次}
+  - {table_name: mart_user_behavior_summary, column_name: first_event_time, data_type: datetime, role: time, business_name: 首次行为时间, synonyms: [首次行为时间, 首次活跃时间, 第一次行为], description: 用户最早一次行为时间, nullable: true, allowed: true, aggregation: min, unit: null}
+  - {table_name: mart_user_behavior_summary, column_name: last_event_time, data_type: datetime, role: time, business_name: 最近行为时间, synonyms: [最近行为时间, 最后活跃时间, 最近活跃, 最后一次行为], description: 用户最近一次行为时间, nullable: true, allowed: true, aggregation: max, unit: null}
+
+  # ------------------------------------------------ mart_user_order_summary
+  - {table_name: mart_user_order_summary, column_name: user_id, data_type: varchar, role: key, business_name: 用户ID, synonyms: [用户, 用户id, 客户, 买家, 用户数, 人数], description: 用户唯一标识，与 dim_user.user_id 一对一, nullable: false, allowed: true, aggregation: count, unit: null}
+  - {table_name: mart_user_order_summary, column_name: valid_order_count, data_type: bigint, role: metric, business_name: 有效订单数, synonyms: [有效订单数, 有效订单, 订单数, 订单量, 购买次数, 下单次数, 成交单数], description: 有效支付且未退款订单的数量, nullable: false, allowed: true, aggregation: sum, unit: 单}
+  - {table_name: mart_user_order_summary, column_name: order_days, data_type: bigint, role: metric, business_name: 下单天数, synonyms: [下单天数, 订单天数, 购买天数], description: 用户产生有效订单的日期数, nullable: false, allowed: true, aggregation: sum, unit: 天}
+  - {table_name: mart_user_order_summary, column_name: gross_amount, data_type: decimal, role: metric, business_name: 有效订单原始金额, synonyms: [原始金额, 订单金额, 应付金额, 成交金额, 订单总额], description: 有效订单原始金额绝对值之和（优惠前）, nullable: false, allowed: true, aggregation: sum, unit: CNY}
+  - {table_name: mart_user_order_summary, column_name: discount_amount, data_type: decimal, role: metric, business_name: 优惠金额, synonyms: [优惠金额, 折扣金额, 优惠, 折扣], description: 有效订单优惠金额之和, nullable: false, allowed: true, aggregation: sum, unit: CNY}
+  - {table_name: mart_user_order_summary, column_name: net_amount, data_type: decimal, role: metric, business_name: 净消费金额, synonyms: [净消费金额, 消费金额, 消费额, 实付金额, 净额, 成交额, gmv, 销售额, 收入], description: 有效支付且未退款订单的优惠后净金额, nullable: false, allowed: true, aggregation: sum, unit: CNY}
+  - {table_name: mart_user_order_summary, column_name: first_order_time, data_type: datetime, role: time, business_name: 首次下单时间, synonyms: [首次下单时间, 首次购买时间, 第一次下单], description: 用户首次有效订单时间, nullable: true, allowed: true, aggregation: min, unit: null}
+  - {table_name: mart_user_order_summary, column_name: last_order_time, data_type: datetime, role: time, business_name: 最近下单时间, synonyms: [最近下单时间, 最近购买时间, 最后一次下单], description: 用户最近一次有效订单时间, nullable: true, allowed: true, aggregation: max, unit: null}
+  - {table_name: mart_user_order_summary, column_name: is_repeat_buyer, data_type: tinyint, role: flag, business_name: 是否复购用户, synonyms: [复购用户, 复购, 是否复购, 重复购买, 复购标记, 复购用户数], description: 有效订单数大于等于 2 记为 1；SUM 后即复购用户数, nullable: false, allowed: true, aggregation: sum, unit: null}
+
+  # --------------------------------------------------- mart_campaign_summary
+  - {table_name: mart_campaign_summary, column_name: campaign_id, data_type: varchar, role: key, business_name: 活动ID, synonyms: [活动, 活动id, 营销活动, 活动编号, campaign], description: 活动唯一标识，一行一个活动, nullable: false, allowed: true, aggregation: count, unit: null}
+  - {table_name: mart_campaign_summary, column_name: exposure_count, data_type: bigint, role: metric, business_name: 曝光次数, synonyms: [曝光量, 曝光次数, 曝光, 展现量], description: 活动曝光总次数，是点击率与转化率的分母, nullable: false, allowed: true, aggregation: sum, unit: 次}
+  - {table_name: mart_campaign_summary, column_name: clicked_count, data_type: bigint, role: metric, business_name: 点击次数, synonyms: [点击次数, 点击数, 点击量], description: 活动被点击的次数, nullable: false, allowed: true, aggregation: sum, unit: 次}
+  - {table_name: mart_campaign_summary, column_name: converted_count, data_type: bigint, role: metric, business_name: 转化次数, synonyms: [转化次数, 转化数, 转化量, 成交次数], description: 活动带来的转化次数, nullable: false, allowed: true, aggregation: sum, unit: 次}
+  - {table_name: mart_campaign_summary, column_name: click_rate, data_type: decimal, role: metric, business_name: 点击率, synonyms: [点击率, ctr, 点击转化率], description: 点击次数 / 曝光次数，跨活动汇总时必须用点击次数与曝光次数重新计算, nullable: true, allowed: true, aggregation: avg, unit: null, is_ratio: true, ratio_numerator: clicked_count, ratio_denominator: exposure_count}
+  - {table_name: mart_campaign_summary, column_name: conversion_rate, data_type: decimal, role: metric, business_name: 曝光转化率, synonyms: [转化率, 曝光转化率, cvr, 曝光转化], description: 转化次数 / 曝光次数；问"点击后的转化率"时不能使用本字段，必须用转化次数/点击次数重算, nullable: true, allowed: true, aggregation: avg, unit: null, is_ratio: true, ratio_numerator: converted_count, ratio_denominator: exposure_count}
+
+  # ----------------------------------------------------- mart_funnel_summary
+  - {table_name: mart_funnel_summary, column_name: event_type, data_type: varchar, role: dimension, business_name: 行为阶段, synonyms: [行为类型, 行为阶段, 事件类型, 漏斗阶段, 漏斗环节], description: 行为阶段取值 visit/click/cart/pay 等, nullable: false, allowed: true, aggregation: none, unit: null}
+  - {table_name: mart_funnel_summary, column_name: event_count, data_type: bigint, role: metric, business_name: 阶段行为次数, synonyms: [阶段行为次数, 事件次数], description: 该阶段行为次数；漏斗用户数不能用本字段代替, nullable: false, allowed: true, aggregation: sum, unit: 次}
+  - {table_name: mart_funnel_summary, column_name: unique_users, data_type: bigint, role: metric, business_name: 阶段去重用户数, synonyms: [去重用户数, 去重用户, 独立用户数, 漏斗用户数, uv], description: 该行为阶段的去重用户数，是漏斗口径的用户数, nullable: false, allowed: true, aggregation: sum, unit: 人}
+  - {table_name: mart_funnel_summary, column_name: unique_sessions, data_type: bigint, role: metric, business_name: 阶段去重会话数, synonyms: [去重会话数, 独立会话数, 会话数], description: 该行为阶段的去重会话数, nullable: false, allowed: true, aggregation: sum, unit: 个}
+
+  # -------------------------------------------------- mart_retention_cohort
+  - {table_name: mart_retention_cohort, column_name: cohort_date, data_type: date, role: time, business_name: cohort日期, synonyms: [cohort, cohort日期, 队列日期, 首次活跃日期, 留存日期], description: 用户首次活跃日期，一行一个 cohort, nullable: false, allowed: true, aggregation: none, unit: null}
+  - {table_name: mart_retention_cohort, column_name: first_users, data_type: bigint, role: metric, business_name: cohort初始用户数, synonyms: [初始用户数, cohort用户数, 新增用户数, 首日用户数], description: 该 cohort 的初始用户数，是留存率的分母, nullable: false, allowed: true, aggregation: sum, unit: 人}
+  - {table_name: mart_retention_cohort, column_name: d1_users, data_type: bigint, role: metric, business_name: 次日留存用户数, synonyms: [次日留存用户数, 次日活跃用户数, 次日用户数], description: 次日仍活跃的用户数, nullable: false, allowed: true, aggregation: sum, unit: 人}
+  - {table_name: mart_retention_cohort, column_name: d7_users, data_type: bigint, role: metric, business_name: 7日留存用户数, synonyms: [7日留存用户数, 七日留存用户数, 7日活跃用户数, 七日活跃用户数], description: 第 7 日仍活跃的用户数, nullable: false, allowed: true, aggregation: sum, unit: 人}
+  - {table_name: mart_retention_cohort, column_name: d30_users, data_type: bigint, role: metric, business_name: 30日留存用户数, synonyms: [30日留存用户数, 三十日留存用户数, 30日活跃用户数], description: 第 30 日仍活跃的用户数, nullable: false, allowed: true, aggregation: sum, unit: 人}
+  - {table_name: mart_retention_cohort, column_name: d1_rate, data_type: decimal, role: metric, business_name: 次日留存率, synonyms: [次日留存率, 次日留存, d1, 1日留存率], description: 次日留存用户数 / cohort 初始用户数, nullable: true, allowed: true, aggregation: avg, unit: null, is_ratio: true, ratio_numerator: d1_users, ratio_denominator: first_users}
+  - {table_name: mart_retention_cohort, column_name: d7_rate, data_type: decimal, role: metric, business_name: 7日留存率, synonyms: [7日留存率, 七日留存率, 7日留存, 七日留存, d7, 周留存率], description: 第 7 日留存用户数 / cohort 初始用户数, nullable: true, allowed: true, aggregation: avg, unit: null, is_ratio: true, ratio_numerator: d7_users, ratio_denominator: first_users}
+  - {table_name: mart_retention_cohort, column_name: d30_rate, data_type: decimal, role: metric, business_name: 30日留存率, synonyms: [30日留存率, 三十日留存率, 30日留存, 月留存率, d30], description: 第 30 日留存用户数 / cohort 初始用户数, nullable: true, allowed: true, aggregation: avg, unit: null, is_ratio: true, ratio_numerator: d30_users, ratio_denominator: first_users}
+
+# ---------------------------------------------------------------------------
+# Metric semantics (section 6.3.3): what a metric IS and how it must aggregate.
+# Ratios must be recomputed from numerator/denominator when aggregating across
+# rows; AVG over pre-computed rates is not a valid overall ratio.
+# ---------------------------------------------------------------------------
+metrics:
+  - name: 用户数
+    table: dim_user
+    column: user_id
+    aggregation: count
+    business_name: 用户数
+    synonyms: [用户数, 人数, 用户数量, 用户总量, 多少用户]
+    description: 按用户粒度统计的去重用户数，COUNT(dim_user.user_id)
+    formula: COUNT(u.user_id)
+  - name: 用户行为次数
+    table: mart_user_behavior_summary
+    column: event_count
+    aggregation: sum
+    business_name: 用户行为总次数
+    synonyms: [行为次数, 行为总量, 总行为数]
+    description: 用户行为总次数
+    formula: SUM(event_count)
+  - name: 活跃天数
+    table: mart_user_behavior_summary
+    column: active_days
+    aggregation: sum
+    business_name: 活跃天数
+    synonyms: [活跃天数, 活跃天]
+    description: 用户发生行为的日期数
+    formula: SUM(active_days)
+  - name: 有效订单数
+    table: mart_user_order_summary
+    column: valid_order_count
+    aggregation: sum
+    business_name: 有效订单数
+    synonyms: [有效订单数, 订单数, 订单量]
+    description: 已支付且未退款订单数量
+    formula: SUM(valid_order_count)
+  - name: 净消费金额
+    table: mart_user_order_summary
+    column: net_amount
+    aggregation: sum
+    business_name: 净消费金额
+    synonyms: [净消费金额, 消费金额, gmv, 销售额, 实付金额]
+    description: 有效订单优惠后金额
+    formula: SUM(net_amount)
+  - name: 复购用户数
+    table: mart_user_order_summary
+    column: is_repeat_buyer
+    aggregation: sum
+    business_name: 复购用户数
+    synonyms: [复购用户数, 复购人数, 复购用户]
+    description: 有效订单数大于等于 2 的用户数
+    formula: SUM(is_repeat_buyer)
+  - name: 活动点击率
+    table: mart_campaign_summary
+    column: click_rate
+    aggregation: weighted_ratio
+    business_name: 点击率
+    synonyms: [点击率, ctr]
+    description: 点击次数 / 曝光次数；单活动可直接用 click_rate，跨活动汇总必须重算
+    formula: SUM(clicked_count) / NULLIF(SUM(exposure_count), 0)
+    numerator_column: clicked_count
+    denominator_column: exposure_count
+  - name: 活动曝光转化率
+    table: mart_campaign_summary
+    column: conversion_rate
+    aggregation: weighted_ratio
+    business_name: 曝光转化率
+    synonyms: [曝光转化率, 转化率, cvr]
+    description: 转化次数 / 曝光次数；单活动可直接用 conversion_rate，跨活动汇总必须重算
+    formula: SUM(converted_count) / NULLIF(SUM(exposure_count), 0)
+    numerator_column: converted_count
+    denominator_column: exposure_count
+  - name: 点击后转化率
+    table: mart_campaign_summary
+    column: converted_count
+    aggregation: weighted_ratio
+    business_name: 点击后转化率
+    synonyms: [点击后转化率, 点击后的转化率, 点击转化率, 点击之后的转化率, 点击后成交率]
+    description: 点击之后的转化率，分母是点击次数而不是曝光次数，禁止复用 conversion_rate
+    formula: SUM(converted_count) / NULLIF(SUM(clicked_count), 0)
+    numerator_column: converted_count
+    denominator_column: clicked_count
+  - name: 漏斗用户数
+    table: mart_funnel_summary
+    column: unique_users
+    aggregation: direct
+    business_name: 阶段去重用户数
+    synonyms: [去重用户数, 漏斗用户数, 独立用户数]
+    description: 该行为阶段去重用户数，不能用 event_count 代替
+    formula: unique_users
+  - name: 次日留存率
+    table: mart_retention_cohort
+    column: d1_rate
+    aggregation: weighted_ratio
+    business_name: 次日留存率
+    synonyms: [次日留存率, 次日留存, 留存率, d1]
+    description: 次日留存用户数 / cohort 初始用户数；未指定留存窗口时按次日留存率口径
+    formula: SUM(d1_users) / NULLIF(SUM(first_users), 0)
+    numerator_column: d1_users
+    denominator_column: first_users
+  - name: 7日留存率
+    table: mart_retention_cohort
+    column: d7_rate
+    aggregation: weighted_ratio
+    business_name: 7日留存率
+    synonyms: [7日留存率, 七日留存率, 7日留存, 七日留存, 周留存率, d7]
+    description: 第 7 日留存用户数 / cohort 初始用户数
+    formula: SUM(d7_users) / NULLIF(SUM(first_users), 0)
+    numerator_column: d7_users
+    denominator_column: first_users
+  - name: 30日留存率
+    table: mart_retention_cohort
+    column: d30_rate
+    aggregation: weighted_ratio
+    business_name: 30日留存率
+    synonyms: [30日留存率, 三十日留存率, 30日留存, 月留存率, d30]
+    description: 第 30 日留存用户数 / cohort 初始用户数
+    formula: SUM(d30_users) / NULLIF(SUM(first_users), 0)
+    numerator_column: d30_users
+    denominator_column: first_users
+
+# ---------------------------------------------------------------------------
+# Allowed and forbidden joins (section 6.4). Explicitly marked instead of only
+# keeping the allowed ones.
+# ---------------------------------------------------------------------------
+join_rules:
+  - {left_table: dim_user, left_column: user_id, right_table: mart_user_behavior_summary, right_column: user_id, cardinality: "1:1", allowed: true, reason: 两张表都是用户粒度}
+  - {left_table: dim_user, left_column: user_id, right_table: mart_user_order_summary, right_column: user_id, cardinality: "1:1", allowed: true, reason: 两张表都是用户粒度}
+  - {left_table: mart_user_behavior_summary, left_column: user_id, right_table: mart_user_order_summary, right_column: user_id, cardinality: "1:1", allowed: true, reason: 两张表均为一行一个用户，可安全按 user_id 关联}
+  - {left_table: mart_campaign_summary, left_column: null, right_table: dim_user, right_column: null, cardinality: "N:N", allowed: false, reason: 活动汇总是自包含表，V1 不提供活动与用户的关联键}
+  - {left_table: mart_funnel_summary, left_column: null, right_table: dim_user, right_column: null, cardinality: "N:N", allowed: false, reason: 漏斗汇总是自包含表，V1 不提供行为阶段与用户的关联键}
+  - {left_table: mart_retention_cohort, left_column: null, right_table: dim_user, right_column: null, cardinality: "N:N", allowed: false, reason: 留存汇总是自包含表，V1 不提供 cohort 与用户的关联键}
+  - {left_table: mart_campaign_summary, left_column: null, right_table: mart_user_order_summary, right_column: null, cardinality: "N:N", allowed: false, reason: 活动效果与用户订单汇总没有可用的关联键，禁止关联后重复累加}
+  - {left_table: mart_funnel_summary, left_column: null, right_table: mart_user_behavior_summary, right_column: null, cardinality: "N:N", allowed: false, reason: 漏斗阶段汇总与用户行为汇总粒度不同，禁止直接关联}
+  - {left_table: mart_retention_cohort, left_column: null, right_table: mart_user_behavior_summary, right_column: null, cardinality: "N:N", allowed: false, reason: cohort 汇总与用户行为汇总粒度不同，禁止直接关联}

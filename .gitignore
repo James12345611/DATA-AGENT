@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+
+# Secrets: never commit runtime configuration
+.env
+
+# Local scratch space (pip temp, probe scripts)
+.tmp/
+.pipprobe/
+.pipprobe2/
+
+# Runtime logs
+logs/
+
+# Test / tooling artefacts
+.pytest_cache/
+.coverage
+htmlcov/
+.ruff_cache/
+.mypy_cache/
